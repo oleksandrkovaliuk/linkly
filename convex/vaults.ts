@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -280,7 +280,7 @@ export const update = mutation({
       requiredRole: "contributor",
     });
     if (!user) {
-      throw new Error("[VAULT UPDATE]: access denied");
+      throw new ConvexError("[VAULT UPDATE]: access denied");
     }
     await ctx.db.patch(vaultId, {
       ...(name ? { name: name.trim() } : {}),
