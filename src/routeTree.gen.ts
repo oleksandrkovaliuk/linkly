@@ -9,22 +9,37 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VaultsRouteRouteImport } from './routes/vaults/route'
 import { Route as SsoRouteRouteImport } from './routes/sso/route'
 import { Route as SharedWithMeRouteRouteImport } from './routes/shared-with-me/route'
 import { Route as MyVaultsRouteRouteImport } from './routes/my-vaults/route'
 import { Route as HistoryRouteRouteImport } from './routes/history/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VaultsVaultIdRouteRouteImport } from './routes/vaults_.$vaultId/route'
 import { Route as SharedShareTokenRouteRouteImport } from './routes/shared_.$shareToken/route'
+import { Route as PublicTokenRouteRouteImport } from './routes/public_.$token/route'
 import { Route as MyVaultsVaultIdRouteRouteImport } from './routes/my-vaults_.$vaultId/route'
+import { Route as InviteTokenRouteRouteImport } from './routes/invite_.$token/route'
+import { Route as VaultsVaultIdSettingsRouteRouteImport } from './routes/vaults_.$vaultId.settings/route'
+import { Route as VaultsVaultIdHistoryRouteRouteImport } from './routes/vaults_.$vaultId.history/route'
 import { Route as SharedShareTokenHistoryRouteRouteImport } from './routes/shared_.$shareToken.history/route'
 import { Route as MyVaultsVaultIdSettingsRouteRouteImport } from './routes/my-vaults_.$vaultId.settings/route'
 import { Route as MyVaultsVaultIdHistoryRouteRouteImport } from './routes/my-vaults_.$vaultId.history/route'
+import { Route as VaultsVaultIdIndexRouteRouteImport } from './routes/vaults_.$vaultId.index/route'
 import { Route as SharedShareTokenIndexRouteRouteImport } from './routes/shared_.$shareToken.index/route'
 import { Route as MyVaultsVaultIdIndexRouteRouteImport } from './routes/my-vaults_.$vaultId.index/route'
+import { Route as VaultsVaultIdSettingsPrivacyRouteRouteImport } from './routes/vaults_.$vaultId.settings.privacy/route'
+import { Route as VaultsVaultIdSettingsAppearanceRouteRouteImport } from './routes/vaults_.$vaultId.settings.appearance/route'
 import { Route as MyVaultsVaultIdSettingsPrivacyRouteRouteImport } from './routes/my-vaults_.$vaultId.settings.privacy/route'
 import { Route as MyVaultsVaultIdSettingsAppearanceRouteRouteImport } from './routes/my-vaults_.$vaultId.settings.appearance/route'
+import { Route as VaultsVaultIdSettingsIndexRouteRouteImport } from './routes/vaults_.$vaultId.settings.index/route'
 import { Route as MyVaultsVaultIdSettingsIndexRouteRouteImport } from './routes/my-vaults_.$vaultId.settings.index/route'
 
+const VaultsRouteRoute = VaultsRouteRouteImport.update({
+  id: '/vaults',
+  path: '/vaults',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SsoRouteRoute = SsoRouteRouteImport.update({
   id: '/sso',
   path: '/sso',
@@ -50,9 +65,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VaultsVaultIdRouteRoute = VaultsVaultIdRouteRouteImport.update({
+  id: '/vaults_/$vaultId',
+  path: '/vaults/$vaultId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SharedShareTokenRouteRoute = SharedShareTokenRouteRouteImport.update({
   id: '/shared_/$shareToken',
   path: '/shared/$shareToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PublicTokenRouteRoute = PublicTokenRouteRouteImport.update({
+  id: '/public_/$token',
+  path: '/public/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MyVaultsVaultIdRouteRoute = MyVaultsVaultIdRouteRouteImport.update({
@@ -60,6 +85,23 @@ const MyVaultsVaultIdRouteRoute = MyVaultsVaultIdRouteRouteImport.update({
   path: '/my-vaults/$vaultId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InviteTokenRouteRoute = InviteTokenRouteRouteImport.update({
+  id: '/invite_/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VaultsVaultIdSettingsRouteRoute =
+  VaultsVaultIdSettingsRouteRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => VaultsVaultIdRouteRoute,
+  } as any)
+const VaultsVaultIdHistoryRouteRoute =
+  VaultsVaultIdHistoryRouteRouteImport.update({
+    id: '/history',
+    path: '/history',
+    getParentRoute: () => VaultsVaultIdRouteRoute,
+  } as any)
 const SharedShareTokenHistoryRouteRoute =
   SharedShareTokenHistoryRouteRouteImport.update({
     id: '/history',
@@ -78,6 +120,11 @@ const MyVaultsVaultIdHistoryRouteRoute =
     path: '/history',
     getParentRoute: () => MyVaultsVaultIdRouteRoute,
   } as any)
+const VaultsVaultIdIndexRouteRoute = VaultsVaultIdIndexRouteRouteImport.update({
+  id: '/',
+  path: '',
+  getParentRoute: () => VaultsVaultIdRouteRoute,
+} as any)
 const SharedShareTokenIndexRouteRoute =
   SharedShareTokenIndexRouteRouteImport.update({
     id: '/',
@@ -90,6 +137,18 @@ const MyVaultsVaultIdIndexRouteRoute =
     path: '',
     getParentRoute: () => MyVaultsVaultIdRouteRoute,
   } as any)
+const VaultsVaultIdSettingsPrivacyRouteRoute =
+  VaultsVaultIdSettingsPrivacyRouteRouteImport.update({
+    id: '/privacy',
+    path: '/privacy',
+    getParentRoute: () => VaultsVaultIdSettingsRouteRoute,
+  } as any)
+const VaultsVaultIdSettingsAppearanceRouteRoute =
+  VaultsVaultIdSettingsAppearanceRouteRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
+    getParentRoute: () => VaultsVaultIdSettingsRouteRoute,
+  } as any)
 const MyVaultsVaultIdSettingsPrivacyRouteRoute =
   MyVaultsVaultIdSettingsPrivacyRouteRouteImport.update({
     id: '/privacy',
@@ -101,6 +160,12 @@ const MyVaultsVaultIdSettingsAppearanceRouteRoute =
     id: '/appearance',
     path: '/appearance',
     getParentRoute: () => MyVaultsVaultIdSettingsRouteRoute,
+  } as any)
+const VaultsVaultIdSettingsIndexRouteRoute =
+  VaultsVaultIdSettingsIndexRouteRouteImport.update({
+    id: '/',
+    path: '',
+    getParentRoute: () => VaultsVaultIdSettingsRouteRoute,
   } as any)
 const MyVaultsVaultIdSettingsIndexRouteRoute =
   MyVaultsVaultIdSettingsIndexRouteRouteImport.update({
@@ -115,13 +180,21 @@ export interface FileRoutesByFullPath {
   '/my-vaults': typeof MyVaultsRouteRoute
   '/shared-with-me': typeof SharedWithMeRouteRoute
   '/sso': typeof SsoRouteRoute
+  '/vaults': typeof VaultsRouteRoute
+  '/invite/$token': typeof InviteTokenRouteRoute
   '/my-vaults/$vaultId': typeof MyVaultsVaultIdIndexRouteRoute
+  '/public/$token': typeof PublicTokenRouteRoute
   '/shared/$shareToken': typeof SharedShareTokenIndexRouteRoute
+  '/vaults/$vaultId': typeof VaultsVaultIdIndexRouteRoute
   '/my-vaults/$vaultId/history': typeof MyVaultsVaultIdHistoryRouteRoute
   '/my-vaults/$vaultId/settings': typeof MyVaultsVaultIdSettingsIndexRouteRoute
   '/shared/$shareToken/history': typeof SharedShareTokenHistoryRouteRoute
+  '/vaults/$vaultId/history': typeof VaultsVaultIdHistoryRouteRoute
+  '/vaults/$vaultId/settings': typeof VaultsVaultIdSettingsIndexRouteRoute
   '/my-vaults/$vaultId/settings/appearance': typeof MyVaultsVaultIdSettingsAppearanceRouteRoute
   '/my-vaults/$vaultId/settings/privacy': typeof MyVaultsVaultIdSettingsPrivacyRouteRoute
+  '/vaults/$vaultId/settings/appearance': typeof VaultsVaultIdSettingsAppearanceRouteRoute
+  '/vaults/$vaultId/settings/privacy': typeof VaultsVaultIdSettingsPrivacyRouteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -129,13 +202,21 @@ export interface FileRoutesByTo {
   '/my-vaults': typeof MyVaultsRouteRoute
   '/shared-with-me': typeof SharedWithMeRouteRoute
   '/sso': typeof SsoRouteRoute
+  '/vaults': typeof VaultsRouteRoute
+  '/invite/$token': typeof InviteTokenRouteRoute
   '/my-vaults/$vaultId': typeof MyVaultsVaultIdIndexRouteRoute
+  '/public/$token': typeof PublicTokenRouteRoute
   '/shared/$shareToken': typeof SharedShareTokenIndexRouteRoute
+  '/vaults/$vaultId': typeof VaultsVaultIdIndexRouteRoute
   '/my-vaults/$vaultId/history': typeof MyVaultsVaultIdHistoryRouteRoute
   '/my-vaults/$vaultId/settings': typeof MyVaultsVaultIdSettingsIndexRouteRoute
   '/shared/$shareToken/history': typeof SharedShareTokenHistoryRouteRoute
+  '/vaults/$vaultId/history': typeof VaultsVaultIdHistoryRouteRoute
+  '/vaults/$vaultId/settings': typeof VaultsVaultIdSettingsIndexRouteRoute
   '/my-vaults/$vaultId/settings/appearance': typeof MyVaultsVaultIdSettingsAppearanceRouteRoute
   '/my-vaults/$vaultId/settings/privacy': typeof MyVaultsVaultIdSettingsPrivacyRouteRoute
+  '/vaults/$vaultId/settings/appearance': typeof VaultsVaultIdSettingsAppearanceRouteRoute
+  '/vaults/$vaultId/settings/privacy': typeof VaultsVaultIdSettingsPrivacyRouteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -144,16 +225,26 @@ export interface FileRoutesById {
   '/my-vaults': typeof MyVaultsRouteRoute
   '/shared-with-me': typeof SharedWithMeRouteRoute
   '/sso': typeof SsoRouteRoute
+  '/vaults': typeof VaultsRouteRoute
+  '/invite_/$token': typeof InviteTokenRouteRoute
   '/my-vaults_/$vaultId': typeof MyVaultsVaultIdRouteRouteWithChildren
+  '/public_/$token': typeof PublicTokenRouteRoute
   '/shared_/$shareToken': typeof SharedShareTokenRouteRouteWithChildren
+  '/vaults_/$vaultId': typeof VaultsVaultIdRouteRouteWithChildren
   '/my-vaults_/$vaultId/': typeof MyVaultsVaultIdIndexRouteRoute
   '/shared_/$shareToken/': typeof SharedShareTokenIndexRouteRoute
+  '/vaults_/$vaultId/': typeof VaultsVaultIdIndexRouteRoute
   '/my-vaults_/$vaultId/history': typeof MyVaultsVaultIdHistoryRouteRoute
   '/my-vaults_/$vaultId/settings': typeof MyVaultsVaultIdSettingsRouteRouteWithChildren
   '/shared_/$shareToken/history': typeof SharedShareTokenHistoryRouteRoute
+  '/vaults_/$vaultId/history': typeof VaultsVaultIdHistoryRouteRoute
+  '/vaults_/$vaultId/settings': typeof VaultsVaultIdSettingsRouteRouteWithChildren
   '/my-vaults_/$vaultId/settings/': typeof MyVaultsVaultIdSettingsIndexRouteRoute
+  '/vaults_/$vaultId/settings/': typeof VaultsVaultIdSettingsIndexRouteRoute
   '/my-vaults_/$vaultId/settings/appearance': typeof MyVaultsVaultIdSettingsAppearanceRouteRoute
   '/my-vaults_/$vaultId/settings/privacy': typeof MyVaultsVaultIdSettingsPrivacyRouteRoute
+  '/vaults_/$vaultId/settings/appearance': typeof VaultsVaultIdSettingsAppearanceRouteRoute
+  '/vaults_/$vaultId/settings/privacy': typeof VaultsVaultIdSettingsPrivacyRouteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -163,13 +254,21 @@ export interface FileRouteTypes {
     | '/my-vaults'
     | '/shared-with-me'
     | '/sso'
+    | '/vaults'
+    | '/invite/$token'
     | '/my-vaults/$vaultId'
+    | '/public/$token'
     | '/shared/$shareToken'
+    | '/vaults/$vaultId'
     | '/my-vaults/$vaultId/history'
     | '/my-vaults/$vaultId/settings'
     | '/shared/$shareToken/history'
+    | '/vaults/$vaultId/history'
+    | '/vaults/$vaultId/settings'
     | '/my-vaults/$vaultId/settings/appearance'
     | '/my-vaults/$vaultId/settings/privacy'
+    | '/vaults/$vaultId/settings/appearance'
+    | '/vaults/$vaultId/settings/privacy'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,13 +276,21 @@ export interface FileRouteTypes {
     | '/my-vaults'
     | '/shared-with-me'
     | '/sso'
+    | '/vaults'
+    | '/invite/$token'
     | '/my-vaults/$vaultId'
+    | '/public/$token'
     | '/shared/$shareToken'
+    | '/vaults/$vaultId'
     | '/my-vaults/$vaultId/history'
     | '/my-vaults/$vaultId/settings'
     | '/shared/$shareToken/history'
+    | '/vaults/$vaultId/history'
+    | '/vaults/$vaultId/settings'
     | '/my-vaults/$vaultId/settings/appearance'
     | '/my-vaults/$vaultId/settings/privacy'
+    | '/vaults/$vaultId/settings/appearance'
+    | '/vaults/$vaultId/settings/privacy'
   id:
     | '__root__'
     | '/'
@@ -191,16 +298,26 @@ export interface FileRouteTypes {
     | '/my-vaults'
     | '/shared-with-me'
     | '/sso'
+    | '/vaults'
+    | '/invite_/$token'
     | '/my-vaults_/$vaultId'
+    | '/public_/$token'
     | '/shared_/$shareToken'
+    | '/vaults_/$vaultId'
     | '/my-vaults_/$vaultId/'
     | '/shared_/$shareToken/'
+    | '/vaults_/$vaultId/'
     | '/my-vaults_/$vaultId/history'
     | '/my-vaults_/$vaultId/settings'
     | '/shared_/$shareToken/history'
+    | '/vaults_/$vaultId/history'
+    | '/vaults_/$vaultId/settings'
     | '/my-vaults_/$vaultId/settings/'
+    | '/vaults_/$vaultId/settings/'
     | '/my-vaults_/$vaultId/settings/appearance'
     | '/my-vaults_/$vaultId/settings/privacy'
+    | '/vaults_/$vaultId/settings/appearance'
+    | '/vaults_/$vaultId/settings/privacy'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -209,12 +326,23 @@ export interface RootRouteChildren {
   MyVaultsRouteRoute: typeof MyVaultsRouteRoute
   SharedWithMeRouteRoute: typeof SharedWithMeRouteRoute
   SsoRouteRoute: typeof SsoRouteRoute
+  VaultsRouteRoute: typeof VaultsRouteRoute
+  InviteTokenRouteRoute: typeof InviteTokenRouteRoute
   MyVaultsVaultIdRouteRoute: typeof MyVaultsVaultIdRouteRouteWithChildren
+  PublicTokenRouteRoute: typeof PublicTokenRouteRoute
   SharedShareTokenRouteRoute: typeof SharedShareTokenRouteRouteWithChildren
+  VaultsVaultIdRouteRoute: typeof VaultsVaultIdRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vaults': {
+      id: '/vaults'
+      path: '/vaults'
+      fullPath: '/vaults'
+      preLoaderRoute: typeof VaultsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sso': {
       id: '/sso'
       path: '/sso'
@@ -250,11 +378,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vaults_/$vaultId': {
+      id: '/vaults_/$vaultId'
+      path: '/vaults/$vaultId'
+      fullPath: '/vaults/$vaultId'
+      preLoaderRoute: typeof VaultsVaultIdRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shared_/$shareToken': {
       id: '/shared_/$shareToken'
       path: '/shared/$shareToken'
       fullPath: '/shared/$shareToken'
       preLoaderRoute: typeof SharedShareTokenRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/public_/$token': {
+      id: '/public_/$token'
+      path: '/public/$token'
+      fullPath: '/public/$token'
+      preLoaderRoute: typeof PublicTokenRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/my-vaults_/$vaultId': {
@@ -263,6 +405,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/my-vaults/$vaultId'
       preLoaderRoute: typeof MyVaultsVaultIdRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/invite_/$token': {
+      id: '/invite_/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vaults_/$vaultId/settings': {
+      id: '/vaults_/$vaultId/settings'
+      path: '/settings'
+      fullPath: '/vaults/$vaultId/settings'
+      preLoaderRoute: typeof VaultsVaultIdSettingsRouteRouteImport
+      parentRoute: typeof VaultsVaultIdRouteRoute
+    }
+    '/vaults_/$vaultId/history': {
+      id: '/vaults_/$vaultId/history'
+      path: '/history'
+      fullPath: '/vaults/$vaultId/history'
+      preLoaderRoute: typeof VaultsVaultIdHistoryRouteRouteImport
+      parentRoute: typeof VaultsVaultIdRouteRoute
     }
     '/shared_/$shareToken/history': {
       id: '/shared_/$shareToken/history'
@@ -285,6 +448,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyVaultsVaultIdHistoryRouteRouteImport
       parentRoute: typeof MyVaultsVaultIdRouteRoute
     }
+    '/vaults_/$vaultId/': {
+      id: '/vaults_/$vaultId/'
+      path: ''
+      fullPath: '/vaults/$vaultId'
+      preLoaderRoute: typeof VaultsVaultIdIndexRouteRouteImport
+      parentRoute: typeof VaultsVaultIdRouteRoute
+    }
     '/shared_/$shareToken/': {
       id: '/shared_/$shareToken/'
       path: ''
@@ -299,6 +469,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MyVaultsVaultIdIndexRouteRouteImport
       parentRoute: typeof MyVaultsVaultIdRouteRoute
     }
+    '/vaults_/$vaultId/settings/privacy': {
+      id: '/vaults_/$vaultId/settings/privacy'
+      path: '/privacy'
+      fullPath: '/vaults/$vaultId/settings/privacy'
+      preLoaderRoute: typeof VaultsVaultIdSettingsPrivacyRouteRouteImport
+      parentRoute: typeof VaultsVaultIdSettingsRouteRoute
+    }
+    '/vaults_/$vaultId/settings/appearance': {
+      id: '/vaults_/$vaultId/settings/appearance'
+      path: '/appearance'
+      fullPath: '/vaults/$vaultId/settings/appearance'
+      preLoaderRoute: typeof VaultsVaultIdSettingsAppearanceRouteRouteImport
+      parentRoute: typeof VaultsVaultIdSettingsRouteRoute
+    }
     '/my-vaults_/$vaultId/settings/privacy': {
       id: '/my-vaults_/$vaultId/settings/privacy'
       path: '/privacy'
@@ -312,6 +496,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/my-vaults/$vaultId/settings/appearance'
       preLoaderRoute: typeof MyVaultsVaultIdSettingsAppearanceRouteRouteImport
       parentRoute: typeof MyVaultsVaultIdSettingsRouteRoute
+    }
+    '/vaults_/$vaultId/settings/': {
+      id: '/vaults_/$vaultId/settings/'
+      path: ''
+      fullPath: '/vaults/$vaultId/settings'
+      preLoaderRoute: typeof VaultsVaultIdSettingsIndexRouteRouteImport
+      parentRoute: typeof VaultsVaultIdSettingsRouteRoute
     }
     '/my-vaults_/$vaultId/settings/': {
       id: '/my-vaults_/$vaultId/settings/'
@@ -375,14 +566,53 @@ const SharedShareTokenRouteRouteWithChildren =
     SharedShareTokenRouteRouteChildren,
   )
 
+interface VaultsVaultIdSettingsRouteRouteChildren {
+  VaultsVaultIdSettingsIndexRouteRoute: typeof VaultsVaultIdSettingsIndexRouteRoute
+  VaultsVaultIdSettingsAppearanceRouteRoute: typeof VaultsVaultIdSettingsAppearanceRouteRoute
+  VaultsVaultIdSettingsPrivacyRouteRoute: typeof VaultsVaultIdSettingsPrivacyRouteRoute
+}
+
+const VaultsVaultIdSettingsRouteRouteChildren: VaultsVaultIdSettingsRouteRouteChildren =
+  {
+    VaultsVaultIdSettingsIndexRouteRoute: VaultsVaultIdSettingsIndexRouteRoute,
+    VaultsVaultIdSettingsAppearanceRouteRoute:
+      VaultsVaultIdSettingsAppearanceRouteRoute,
+    VaultsVaultIdSettingsPrivacyRouteRoute:
+      VaultsVaultIdSettingsPrivacyRouteRoute,
+  }
+
+const VaultsVaultIdSettingsRouteRouteWithChildren =
+  VaultsVaultIdSettingsRouteRoute._addFileChildren(
+    VaultsVaultIdSettingsRouteRouteChildren,
+  )
+
+interface VaultsVaultIdRouteRouteChildren {
+  VaultsVaultIdIndexRouteRoute: typeof VaultsVaultIdIndexRouteRoute
+  VaultsVaultIdHistoryRouteRoute: typeof VaultsVaultIdHistoryRouteRoute
+  VaultsVaultIdSettingsRouteRoute: typeof VaultsVaultIdSettingsRouteRouteWithChildren
+}
+
+const VaultsVaultIdRouteRouteChildren: VaultsVaultIdRouteRouteChildren = {
+  VaultsVaultIdIndexRouteRoute: VaultsVaultIdIndexRouteRoute,
+  VaultsVaultIdHistoryRouteRoute: VaultsVaultIdHistoryRouteRoute,
+  VaultsVaultIdSettingsRouteRoute: VaultsVaultIdSettingsRouteRouteWithChildren,
+}
+
+const VaultsVaultIdRouteRouteWithChildren =
+  VaultsVaultIdRouteRoute._addFileChildren(VaultsVaultIdRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HistoryRouteRoute: HistoryRouteRoute,
   MyVaultsRouteRoute: MyVaultsRouteRoute,
   SharedWithMeRouteRoute: SharedWithMeRouteRoute,
   SsoRouteRoute: SsoRouteRoute,
+  VaultsRouteRoute: VaultsRouteRoute,
+  InviteTokenRouteRoute: InviteTokenRouteRoute,
   MyVaultsVaultIdRouteRoute: MyVaultsVaultIdRouteRouteWithChildren,
+  PublicTokenRouteRoute: PublicTokenRouteRoute,
   SharedShareTokenRouteRoute: SharedShareTokenRouteRouteWithChildren,
+  VaultsVaultIdRouteRoute: VaultsVaultIdRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

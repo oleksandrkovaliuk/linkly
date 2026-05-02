@@ -104,7 +104,7 @@ function RouteComponent() {
         grouped.map(([vaultId, group]) => (
           <section key={vaultId} className="space-y-1">
             <Link
-              to="/my-vaults/$vaultId"
+              to="/vaults/$vaultId"
               params={{ vaultId: vaultId as Id<"vaults"> }}
               preload="intent"
               className="hover:bg-accent/40 group flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors"

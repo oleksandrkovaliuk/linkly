@@ -1,4 +1,4 @@
-import { Eye, ImageOff } from "lucide-react";
+import { Eye, ImageOff, Pin } from "lucide-react";
 import * as React from "react";
 
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "./ui/avatar";
@@ -21,10 +21,14 @@ type LinkCardProps = {
   category: string;
   sharedBy?: string;
   isEnriching?: boolean;
+  isPinned?: boolean;
 
   viewers?: LinkViewer[];
   onNavigate?: () => void;
+  onTogglePin?: () => void;
 };
+
+const EMPTY_VIEWERS: LinkViewer[] = [];
 
 export function LinkCard({
   title,
@@ -35,8 +39,10 @@ export function LinkCard({
   category,
   sharedBy,
   isEnriching = false,
-  viewers = [],
+  isPinned = false,
+  viewers = EMPTY_VIEWERS,
   onNavigate,
+  onTogglePin,
 }: LinkCardProps) {
   const [isImageBroken, setIsImageBroken] = React.useState(false);
   const [imageLoaded, setImageLoaded] = React.useState(false);
@@ -70,16 +76,39 @@ export function LinkCard({
   }
 
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      className="group relative block outline-none"
-      onClick={() => {
-        onNavigate?.();
-      }}
-    >
+    <div className="group relative block outline-none">
       <Card className="relative h-52 overflow-hidden py-0 transition-shadow duration-200 hover:shadow-lg">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute inset-0 z-[1]"
+          aria-label={`Open ${title}`}
+          onClick={() => {
+            onNavigate?.();
+          }}
+        />
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+          {onTogglePin ? (
+            <button
+              type="button"
+              className={`rounded-full p-1.5 opacity-0 shadow-sm backdrop-blur-sm transition-all group-hover:opacity-100 ${
+                isPinned
+                  ? "bg-amber-400 text-amber-950 opacity-100"
+                  : "bg-background/80 text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onTogglePin();
+              }}
+              aria-label={isPinned ? "Unpin link" : "Pin link"}
+            >
+              <Pin className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+
         {hasImage ? (
           <>
             <img
@@ -109,7 +138,7 @@ export function LinkCard({
         ) : null}
 
         <div
-          className={`relative flex h-full flex-col justify-end p-3.5 ${hasImage && imageLoaded ? "text-white" : ""}`}
+          className={`pointer-events-none relative flex h-full flex-col justify-end p-3.5 ${hasImage && imageLoaded ? "text-white" : ""}`}
         >
           <div className="flex items-center gap-1.5">
             {favicon ? (
@@ -171,6 +200,6 @@ export function LinkCard({
           </Avatar>
         ))}
       </AvatarGroup>
-    </a>
+    </div>
   );
 }

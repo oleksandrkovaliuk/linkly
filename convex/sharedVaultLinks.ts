@@ -203,7 +203,11 @@ export const list = query({
         const link = await ctx.db.get(row.link_id);
         if (!link) return null;
         const addedByInfo = await resolveUser(row.added_by as string);
-        return { ...link, addedByName: addedByInfo.name };
+        return {
+          ...link,
+          addedByName: addedByInfo.name,
+          pinnedAt: row.pinned_at ?? null,
+        };
       }),
       ...legacyOnlyRows.map(async (row) => {
         const link = await ctx.db.get(row.link_id);

@@ -7,12 +7,12 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useAuth } from "~/hooks/use-auth";
 import {
+  Home,
   Inbox,
   Link2,
   LogInIcon,
   Plus,
   Search,
-  Share2,
 } from "lucide-react";
 
 const isMac =
@@ -52,24 +52,7 @@ type SidebarVault = {
   name: string;
   color?: string | null;
   emoji?: string;
-};
-
-type SidebarReceivedShare = {
-  share: {
-    _id: string;
-    token: string;
-  };
-  role?: "viewer" | "editor";
-  vault?: {
-    name?: string;
-    color?: string | null;
-    emoji?: string;
-  } | null;
-  sharer?: {
-    name?: string | null;
-    email?: string | null;
-    image_url?: string | null;
-  } | null;
+  vaultType?: "owned" | "shared";
 };
 
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
@@ -82,13 +65,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     ...convexQuery(api.vaults.listMine, {}),
   });
 
-  const { data: receivedShares, isLoading: isReceivedSharesLoading } =
-    useQuery({
-      enabled: auth.canQueryProtected,
-      ...convexQuery(api.shares.listReceived, {}),
-    });
+  const { data: pendingInviteCount } = useQuery({
+    enabled: auth.canQueryProtected,
+    ...convexQuery(api.shares.pendingInviteCount, {}),
+  });
   const typedVaults = (vaults ?? []) as SidebarVault[];
-  const typedReceivedShares = (receivedShares ?? []) as SidebarReceivedShare[];
 
   const shouldShowDropdown = auth.session && !auth.isLoading;
   const shouldShowLoginButton = !auth.session && !auth.isLoading;
@@ -97,22 +78,16 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
     auth.isLoading ||
     (auth.authenticated && !auth.canQueryProtected) ||
     isVaultsLoading;
-  const shouldShowSharedSkeletons =
-    auth.isLoading ||
-    (auth.authenticated && !auth.canQueryProtected) ||
-    isReceivedSharesLoading;
-
   const routeParams: { vaultId?: string; shareToken?: string } = useParams({
     strict: false,
   });
   const isOnSpecificVault = Boolean(routeParams.vaultId);
-  const isOnSpecificShare = Boolean(routeParams.shareToken);
 
-  const isMyVaultsActive =
-    Boolean(matchRoute({ to: "/my-vaults" })) && !isOnSpecificVault;
-  const isSharedWithMeActive =
-    Boolean(matchRoute({ to: "/shared-with-me" })) && !isOnSpecificShare;
+  const isDashboardActive = Boolean(matchRoute({ to: "/" }));
+  const isVaultsActive =
+    Boolean(matchRoute({ to: "/vaults" })) && !isOnSpecificVault;
   const isInboxActive = Boolean(matchRoute({ to: "/history" }));
+  const inboxCount = Number(pendingInviteCount ?? 0);
 
   return (
     <Sidebar {...props}>
@@ -157,15 +132,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              isActive={isMyVaultsActive}
+              isActive={isDashboardActive}
               render={
-                <Link
-                  to="/my-vaults"
-                  preload="intent"
-                  activeOptions={{ exact: true }}
-                >
-                  <Link2 />
-                  <span className="truncate">My Vaults</span>
+                <Link to="/" preload="intent" activeOptions={{ exact: true }}>
+                  <Home />
+                  <span className="truncate">Dashboard</span>
                 </Link>
               }
             />
@@ -173,15 +144,20 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
 
           <SidebarMenuItem>
             <SidebarMenuButton
-              isActive={isSharedWithMeActive}
+              isActive={isVaultsActive}
               render={
                 <Link
-                  to="/shared-with-me"
+                  to="/vaults"
                   preload="intent"
                   activeOptions={{ exact: true }}
                 >
-                  <Share2 />
-                  <span className="truncate">Shared with me</span>
+                  <Link2 />
+                  <span className="truncate">Vaults</span>
+                  {inboxCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background">
+                      {inboxCount > 9 ? "9+" : inboxCount}
+                    </span>
+                  ) : null}
                 </Link>
               }
             />
@@ -235,7 +211,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                       isActive={routeParams.vaultId === vault._id}
                       render={
                         <Link
-                          to="/my-vaults/$vaultId"
+                          to="/vaults/$vaultId"
                           preload="intent"
                           params={{ vaultId: vault._id }}
                         >
@@ -248,6 +224,11 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
                             {vault.emoji ?? "📁"}
                           </span>
                           <span className="truncate">{vault.name}</span>
+                          {vault.vaultType === "shared" ? (
+                            <span className="ml-auto rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                              Shared
+                            </span>
+                          ) : null}
                         </Link>
                       }
                     />
@@ -266,72 +247,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {typedReceivedShares.length > 0 || shouldShowSharedSkeletons ? (
-          <SidebarGroup>
-            <SidebarGroupLabel>Shared</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {shouldShowSharedSkeletons
-                  ? Array.from({ length: 2 }).map((_, index) => (
-                      <SidebarMenuItem key={`shared-skeleton-${index}`}>
-                        <SidebarMenuButton>
-                          <Skeleton className="size-5 shrink-0 rounded-md" />
-                          <Skeleton className="h-3.5 w-20" />
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))
-                  : typedReceivedShares.map((item) => (
-                      <SidebarMenuItem
-                        key={item.share._id}
-                        className="relative"
-                      >
-                        <SidebarMenuButton
-                          isActive={
-                            routeParams.shareToken === item.share.token
-                          }
-                          render={
-                            <Link
-                              to="/shared/$shareToken"
-                              preload="intent"
-                              params={{ shareToken: item.share.token }}
-                            >
-                              <span
-                                className="flex size-5 shrink-0 items-center justify-center rounded-md text-[11px] leading-none"
-                                style={{
-                                  backgroundColor: `${item.vault?.color ?? "#6b7280"}20`,
-                                }}
-                              >
-                                {item.vault?.emoji ?? "📁"}
-                              </span>
-                              <span className="truncate">
-                                {item.vault?.name ?? "Shared vault"}
-                              </span>
-                            </Link>
-                          }
-                        />
-                        {item.sharer?.image_url ? (
-                          <Avatar
-                            size="xs"
-                            className="pointer-events-none absolute -right-1 -bottom-1 size-5 ring-2 ring-background"
-                          >
-                            <AvatarImage src={item.sharer.image_url} />
-                            <AvatarFallback className="text-[8px]">
-                              {(
-                                item.sharer.name ??
-                                item.sharer.email ??
-                                "?"
-                              )
-                                .charAt(0)
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                        ) : null}
-                      </SidebarMenuItem>
-                    ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : null}
       </SidebarContent>
 
       <SidebarFooter>

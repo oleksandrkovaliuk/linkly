@@ -222,7 +222,7 @@ function CommandPaletteContent({
   function navigateToVault(vaultId: string) {
     onClose();
     void navigate({
-      to: "/my-vaults/$vaultId",
+      to: "/vaults/$vaultId",
       params: { vaultId },
     });
   }
