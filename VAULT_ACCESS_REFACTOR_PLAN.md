@@ -98,6 +98,7 @@ This plan tracks the production hardening and architecture refactor for Linkly v
 - Verify inbox count matches pending invites.
 - Verify pins sort newest first.
 - Verify recents are scoped to the current user.
+- Capture visual proof for the main flows with screenshots and, where practical, a short video or trace of the full app flow.
 - Remove legacy private shared-token and shared-with-me flows after replacement is proven.
 
 ## GitHub Issue Breakdown
@@ -119,3 +120,5 @@ This plan tracks the production hardening and architecture refactor for Linkly v
   - frontend/routing review
   - verification/test review
 - Keep the draft PR body updated with issue links, progress, test results, and any behavior changes.
+- Leave a progress comment on the draft PR after each implementation chunk lands, summarizing what changed, what was verified, and which tracked issue moved forward.
+- Attach or link screenshots, videos, traces, or other visual verification artifacts to PR comments whenever UI or end-to-end behavior changes.
