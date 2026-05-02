@@ -1,0 +1,13 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AuthFlow } from "../-components/auth-flow";
+
+export const Route = createFileRoute("/_auth/sign-in")({
+  component: RouteComponent,
+  beforeLoad: async ({ context }) => {
+    console.log(context.auth?.user, "context.auth before login");
+  },
+});
+
+function RouteComponent() {
+  return <AuthFlow />;
+}

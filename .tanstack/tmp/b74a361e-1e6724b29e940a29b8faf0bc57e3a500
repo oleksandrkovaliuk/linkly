@@ -1,0 +1,71 @@
+import { OrganizationSwitcher, UserButton } from "@clerk/clerk-react";
+import type { OrganizationResource } from "@clerk/shared/types";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+
+import { Layout } from "~/components/layout";
+
+export const Route = createFileRoute("/{-$organization}")({
+  component: RouteComponent,
+  beforeLoad: async ({ context, params, location }) => {
+    console.log(
+      context.auth?.loading,
+      context.auth?.user,
+      "context.auth after",
+    );
+
+    const location_segments = location.pathname.split("/")?.filter(Boolean);
+
+    const organization_slug = context?.organization?.slug;
+
+    const requestedSlugWithinUserMemberships =
+      context?.auth?.user?.organizationMemberships?.find(
+        (membership) => membership.organization.slug === params.organization,
+      );
+
+    if (
+      requestedSlugWithinUserMemberships &&
+      requestedSlugWithinUserMemberships.organization.slug !== organization_slug
+    ) {
+      await context?.setActive({
+        organization: requestedSlugWithinUserMemberships.organization,
+      });
+    }
+
+    if (requestedSlugWithinUserMemberships && location_segments?.length === 1) {
+      throw redirect({
+        to: `/{-$organization}/home`,
+        params: {
+          organization:
+            requestedSlugWithinUserMemberships.organization.slug ??
+            organization_slug ??
+            "",
+        },
+      });
+    }
+
+    if (organization_slug && !params.organization) {
+      throw redirect({
+        to: "/{-$organization}/home",
+        params: {
+          organization: organization_slug,
+        },
+      });
+    }
+  },
+});
+
+function RouteComponent() {
+  function afterSelectOrganizationUrl(organization: OrganizationResource) {
+    return `/${organization.slug}/home`;
+  }
+
+  return (
+    <Layout>
+      <UserButton />
+      <OrganizationSwitcher
+        afterSelectOrganizationUrl={afterSelectOrganizationUrl}
+      />
+      <Outlet />
+    </Layout>
+  );
+}

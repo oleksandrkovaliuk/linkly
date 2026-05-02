@@ -1,0 +1,36 @@
+import { IconBookUpload } from "@tabler/icons-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Button } from "~/components/ui/button";
+import * as React from "react";
+
+export const Route = createFileRoute("/{-$organization}/collection")({
+  component: RouteComponent,
+});
+
+function RouteComponent() {
+  const [file, setFile] = React.useState<File | null>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFile(file);
+    }
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+  }
+
+  return (
+    <div>
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Collection</h1>
+        <Button variant="default" size="icon-lg" onClick={handleUpload}>
+          <IconBookUpload className="size-6" />
+        </Button>
+      </header>
+
+      <input type="file" onChange={handleFileChange} />
+    </div>
+  );
+}
