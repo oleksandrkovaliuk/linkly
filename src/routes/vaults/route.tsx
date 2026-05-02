@@ -1,6 +1,6 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { AppShellSkeleton } from "~/components/app-shell-skeleton";
 import { CreateVaultDialog } from "~/components/create-vault-dialog";
 import { Badge } from "~/components/ui/badge";
@@ -14,6 +14,11 @@ import { Check, FolderOpenDot, Inbox, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/vaults")({
+  beforeLoad: ({ context }) => {
+    if (context.auth?.authResolved && !context.auth.authenticated) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: VaultsRoute,
 });
 

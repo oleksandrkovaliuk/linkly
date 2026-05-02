@@ -1,6 +1,12 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useMatches,
+} from "@tanstack/react-router";
 import { AppShellSkeleton } from "~/components/app-shell-skeleton";
 import { CommandPalette } from "~/components/command-palette";
 import { SignInToContinue } from "~/components/sign-in-to-continue";
@@ -29,6 +35,11 @@ import * as React from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/vaults_/$vaultId")({
+  beforeLoad: ({ context }) => {
+    if (context.auth?.authResolved && !context.auth.authenticated) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: VaultRoute,
 });
 

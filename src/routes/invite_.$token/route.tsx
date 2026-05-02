@@ -1,6 +1,11 @@
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { AppShellSkeleton } from "~/components/app-shell-skeleton";
 import { SignInToContinue } from "~/components/sign-in-to-continue";
 import { Badge } from "~/components/ui/badge";
@@ -13,6 +18,11 @@ import { Check, Lock, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/invite_/$token")({
+  beforeLoad: ({ context }) => {
+    if (context.auth?.authResolved && !context.auth.authenticated) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: InviteDecisionRoute,
 });
 

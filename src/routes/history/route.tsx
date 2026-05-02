@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "~/convex/_generated/api";
@@ -11,6 +11,11 @@ import { VaultIdentity } from "~/components/vault-identity";
 import { ChevronRight, Inbox } from "lucide-react";
 
 export const Route = createFileRoute("/history")({
+  beforeLoad: ({ context }) => {
+    if (context.auth?.authResolved && !context.auth.authenticated) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: RouteComponent,
 });
 
