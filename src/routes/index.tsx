@@ -11,7 +11,7 @@ import { DialogTrigger } from "~/components/ui/dialog";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { useAuth } from "~/hooks/use-auth";
-import { ArrowRight, Inbox, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, History, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -29,10 +29,11 @@ type RecentVault = {
   };
 };
 
-type PendingInvite = {
-  invite: { _id: Id<"share_invites"> };
-  vault: { name?: string; color?: string | null; emoji?: string } | null;
-  inviter: { email?: string | null; name?: string | null } | null;
+type HistoryEvent = {
+  id: string;
+  humanType: string;
+  summary: string;
+  vaultId: string;
 };
 
 function RouteComponent() {
@@ -42,9 +43,9 @@ function RouteComponent() {
     enabled: auth.canQueryProtected,
     ...convexQuery(api.vaults.listRecent, {}),
   });
-  const { data: pendingInvites, isLoading: isInvitesLoading } = useQuery({
+  const { data: history } = useQuery({
     enabled: auth.canQueryProtected,
-    ...convexQuery(api.shares.listPendingInvites, {}),
+    ...convexQuery(api.history.listGlobal, {}),
   });
 
   if (auth.authenticated && !auth.canQueryProtected) {
@@ -53,82 +54,68 @@ function RouteComponent() {
 
   if (auth.authenticated && auth.canQueryProtected) {
     const typedRecents = (recents ?? []) as RecentVault[];
-    const typedInvites = (pendingInvites ?? []) as PendingInvite[];
+    const typedHistory = (history ?? []) as HistoryEvent[];
+    const latestHistoryByVault = new Map<string, HistoryEvent>();
+    for (const event of typedHistory) {
+      if (!latestHistoryByVault.has(event.vaultId)) {
+        latestHistoryByVault.set(event.vaultId, event);
+      }
+    }
 
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 p-6">
-        <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-6 shadow-sm">
-          <div className="absolute -right-20 -top-24 size-64 rounded-full bg-primary/10 blur-3xl" />
-          <div className="relative flex flex-wrap items-end justify-between gap-4">
-            <div className="space-y-3">
-              <Badge variant="outline" className="bg-background/60">
-                Dashboard
-              </Badge>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">
-                  Pick up where the vaults are warm.
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Recent collaboration, pending invitations, and fast vault
-                  actions live together here.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <CreateVaultDialog
-                trigger={
-                  <Button>
-                    <Plus className="size-4" />
-                    New vault
-                  </Button>
-                }
-              />
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={<Link to="/vaults">View all</Link>}
-              />
-            </div>
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-7 p-6">
+        <section className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-background/60">
+              Dashboard
+            </Badge>
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-balance">
+              Pick up where the vaults are warm.
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
+              Recent vaults, the latest activity inside them, and a clear jump
+              back into the work.
+            </p>
           </div>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-          <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Latest activity</h2>
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-medium">Latest activity</h2>
+          </div>
+          {isRecentsLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-40 animate-pulse rounded-2xl bg-muted/40"
+                />
+              ))}
             </div>
-            {isRecentsLoading ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="h-32 animate-pulse rounded-2xl bg-muted/40"
-                  />
-                ))}
-              </div>
-            ) : typedRecents.length ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {typedRecents.map((vault) => (
-                  <Link
+          ) : typedRecents.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {typedRecents.map((vault) => {
+                const event = latestHistoryByVault.get(vault._id as string);
+                return (
+                  <Card
                     key={vault._id}
-                    to="/vaults/$vaultId"
-                    params={{ vaultId: vault._id }}
-                    preload="intent"
-                    className="group outline-none"
+                    className="relative h-full overflow-hidden p-0 transition-shadow hover:shadow-md"
                   >
-                    <Card className="relative h-full transition-all hover:-translate-y-0.5 hover:shadow-md">
-                      <div
-                        className="absolute inset-x-0 top-0 h-16 opacity-70"
-                        style={{
-                          background: `linear-gradient(135deg, ${
-                            vault.color ?? "#6b7280"
-                          }33, transparent)`,
-                        }}
-                      />
-                      <div className="relative flex items-start gap-3 px-4">
+                    <div
+                      className="absolute inset-x-0 top-0 h-20 opacity-80"
+                      style={{
+                        background: `linear-gradient(135deg, ${
+                          vault.color ?? "#6b7280"
+                        }2e, transparent)`,
+                      }}
+                    />
+                    <div className="relative flex h-full flex-col gap-4 p-4">
+                      <div className="flex items-start gap-3">
                         <span
-                          className="flex size-11 shrink-0 items-center justify-center rounded-xl text-lg"
+                          className="flex size-11 shrink-0 items-center justify-center rounded-xl text-lg shadow-sm ring-1 ring-black/[0.04]"
                           style={{
                             backgroundColor: `${vault.color ?? "#6b7280"}20`,
                           }}
@@ -136,84 +123,87 @@ function RouteComponent() {
                           {vault.emoji ?? "📁"}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
-                            {vault.name}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">
+                              {vault.name}
+                            </p>
+                            <Badge variant="secondary">
+                              {vault.accessRole === "owner"
+                                ? "Owned"
+                                : "Shared"}
+                            </Badge>
+                          </div>
                           <p className="mt-1 text-xs text-muted-foreground">
                             {vault.recent?.last_action?.replace(/_/g, " ") ??
                               "recently active"}
                           </p>
                         </div>
-                        <ArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                       </div>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <Card className="px-4">
-                <p className="text-sm font-medium">No recent vault activity</p>
-                <p className="text-sm text-muted-foreground">
-                  Open a vault, add a link, or accept an invite to populate this
-                  space.
-                </p>
-              </Card>
-            )}
-          </section>
 
-          <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Inbox className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Inbox preview</h2>
-              {typedInvites.length ? (
-                <Badge variant="secondary">{typedInvites.length}</Badge>
-              ) : null}
-            </div>
-            <Card className="px-4">
-              {isInvitesLoading ? (
-                <div className="h-24 animate-pulse rounded-xl bg-muted/40" />
-              ) : typedInvites.length ? (
-                <div className="space-y-3">
-                  {typedInvites.slice(0, 3).map((item) => (
-                    <div key={item.invite._id} className="flex items-center gap-3">
-                      <span
-                        className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base"
-                        style={{
-                          backgroundColor: `${item.vault?.color ?? "#f59e0b"}20`,
-                        }}
-                      >
-                        {item.vault?.emoji ?? "📁"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {item.vault?.name ?? "Shared vault"}
+                      <div className="rounded-xl bg-background/70 p-3 shadow-sm ring-1 ring-black/[0.04]">
+                        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                          <History className="size-3.5" />
+                          Snapshot
+                        </div>
+                        <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed">
+                          {event?.summary ?? "No visible history yet."}
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {item.inviter?.email ??
-                            item.inviter?.name ??
-                            "Invitation waiting"}
-                        </p>
+                        {event ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {event.humanType}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-auto flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          nativeButton={false}
+                          render={
+                            <Link
+                              to="/vaults/$vaultId"
+                              params={{ vaultId: vault._id }}
+                              preload="intent"
+                            >
+                              Open
+                              <ArrowRight className="size-3.5" />
+                            </Link>
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          nativeButton={false}
+                          render={
+                            <Link
+                              to="/vaults/$vaultId/history"
+                              params={{ vaultId: vault._id }}
+                              preload="intent"
+                            >
+                              History
+                            </Link>
+                          }
+                        />
                       </div>
                     </div>
-                  ))}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    nativeButton={false}
-                    render={<Link to="/vaults">View all</Link>}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Inbox is clear</p>
-                  <p className="text-sm text-muted-foreground">
-                    Pending vault invitations will show up here.
-                  </p>
-                </div>
-              )}
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="px-4">
+              <p className="text-sm font-medium">No recent vault activity</p>
+              <p className="text-sm text-muted-foreground">
+                Open a vault, add a link, or accept an invite to populate this
+                space.
+              </p>
+              <div className="pt-1">
+                <CreateVaultDialog />
+              </div>
             </Card>
-          </section>
-        </div>
+          )}
+        </section>
       </div>
     );
   }
