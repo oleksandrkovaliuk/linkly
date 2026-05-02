@@ -102,13 +102,13 @@ This plan tracks the production hardening and architecture refactor for Linkly v
 
 ## GitHub Issue Breakdown
 
-1. Introduce vault memberships and centralized access checks.
-2. Build invite inbox and accept/decline lifecycle.
-3. Refactor vault link permissions, shared pinning, and per-user recents.
-4. Narrow and humanize vault activity history.
-5. Move routing to dashboard, `/vaults`, invite, and public routes.
-6. Build dashboard and vault hub UI in the Linkly visual system.
-7. Verify production safety flows and remove legacy sharing paths.
+1. [Introduce vault memberships and centralized access checks](https://github.com/oleksandrkovaliuk/linkly/issues/1).
+2. [Build invite inbox and accept/decline lifecycle](https://github.com/oleksandrkovaliuk/linkly/issues/2).
+3. [Refactor vault link permissions, shared pinning, and per-user recents](https://github.com/oleksandrkovaliuk/linkly/issues/3).
+4. [Narrow and humanize vault activity history](https://github.com/oleksandrkovaliuk/linkly/issues/4).
+5. [Move routing to dashboard, `/vaults`, invite, and public routes](https://github.com/oleksandrkovaliuk/linkly/issues/5).
+6. [Build dashboard and vault hub in the Linkly visual system](https://github.com/oleksandrkovaliuk/linkly/issues/6).
+7. [Verify production safety flows and remove legacy sharing paths](https://github.com/oleksandrkovaliuk/linkly/issues/7).
 
 ## Draft PR Operating Notes
 
