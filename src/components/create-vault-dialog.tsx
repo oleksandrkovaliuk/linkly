@@ -224,7 +224,7 @@ export function CreateVaultDialog({
           setOpen(false);
           resetAll();
           void navigate({
-            to: "/my-vaults/$vaultId",
+            to: "/vaults/$vaultId",
             params: { vaultId },
           });
         },

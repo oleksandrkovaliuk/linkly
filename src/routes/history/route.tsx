@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "~/convex/_generated/api";
@@ -11,6 +11,11 @@ import { VaultIdentity } from "~/components/vault-identity";
 import { ChevronRight, Inbox } from "lucide-react";
 
 export const Route = createFileRoute("/history")({
+  beforeLoad: ({ context }) => {
+    if (context.auth?.authResolved && !context.auth.authenticated) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: RouteComponent,
 });
 
@@ -104,7 +109,7 @@ function RouteComponent() {
         grouped.map(([vaultId, group]) => (
           <section key={vaultId} className="space-y-1">
             <Link
-              to="/my-vaults/$vaultId"
+              to="/vaults/$vaultId"
               params={{ vaultId: vaultId as Id<"vaults"> }}
               preload="intent"
               className="hover:bg-accent/40 group flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors"

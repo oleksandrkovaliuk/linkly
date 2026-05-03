@@ -5,14 +5,20 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authorizeShareAccess } from "./lib/authorizeShareAccess";
 import { authorizeUserIdentity } from "./lib/authorizeUserIdentity";
-import { authorizeVaultAccess } from "./lib/authorizeVaultAccess";
+import {
+  authorizeVaultAccess,
+  authorizeVaultRole,
+  getAuthenticatedUser,
+} from "./lib/authorizeVaultAccess";
 
-type ShareRole = "viewer" | "editor";
+type ShareRole = "viewer" | "editor" | "contributor";
 type HistoryEventType =
   | "share_created"
   | "share_revoked"
   | "share_made_public"
-  | "invite_sent";
+  | "invite_sent"
+  | "member_added"
+  | "member_removed";
 
 function shareToken() {
   return crypto.randomUUID().replace(/-/g, "");
@@ -34,8 +40,28 @@ async function createUniqueToken(ctx: MutationCtx) {
   throw new ConvexError("[SHARE CREATE]: failed to generate a unique token");
 }
 
+async function createUniqueInviteToken(ctx: MutationCtx) {
+  for (let attempts = 0; attempts < 5; attempts += 1) {
+    const token = shareToken();
+    const existing = await ctx.db
+      .query("share_invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+
+    if (!existing) {
+      return token;
+    }
+  }
+
+  throw new ConvexError("[INVITE CREATE]: failed to generate a unique token");
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function toMembershipRole(role: ShareRole) {
+  return role === "viewer" ? "viewer" : "contributor";
 }
 
 async function logShareEvent(
@@ -44,6 +70,7 @@ async function logShareEvent(
     vaultId: Id<"vaults">;
     actorId: Id<"users">;
     shareId?: Id<"shares">;
+    targetUserId?: Id<"users">;
     eventType: HistoryEventType;
     summary: string;
   }
@@ -52,9 +79,42 @@ async function logShareEvent(
     vault_id: input.vaultId,
     actor_id: input.actorId,
     share_id: input.shareId,
+    target_user_id: input.targetUserId,
     event_type: input.eventType,
     summary: input.summary,
     created_at: Date.now(),
+  });
+}
+
+async function touchVaultRecent(
+  ctx: MutationCtx,
+  input: {
+    userId: Id<"users">;
+    vaultId: Id<"vaults">;
+    action: "invite_accepted";
+  }
+) {
+  const existing = await ctx.db
+    .query("vault_recents")
+    .withIndex("by_user_id_vault_id", (q) =>
+      q.eq("user_id", input.userId).eq("vault_id", input.vaultId)
+    )
+    .first();
+  const now = Date.now();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      last_active_at: now,
+      last_action: input.action,
+    });
+    return;
+  }
+
+  await ctx.db.insert("vault_recents", {
+    user_id: input.userId,
+    vault_id: input.vaultId,
+    last_active_at: now,
+    last_action: input.action,
   });
 }
 
@@ -98,7 +158,7 @@ async function ensureOwnedShare(
 }
 
 function assertInviteRole(value: ShareRole) {
-  if (value !== "viewer" && value !== "editor") {
+  if (value !== "viewer" && value !== "editor" && value !== "contributor") {
     throw new ConvexError("[SHARE INVITE]: invalid role");
   }
 }
@@ -119,7 +179,8 @@ export const setAccess = mutation({
   handler: async (ctx, { vaultId, isPublic }) => {
     const { user } = await authorizeVaultAccess(ctx, vaultId);
     const share = await ensureOwnedShare(ctx, vaultId, user._id);
-    await ctx.db.patch(share._id, { is_public: isPublic });
+    const token = await createUniqueToken(ctx);
+    await ctx.db.patch(share._id, { is_public: isPublic, token });
 
     if (isPublic) {
       await logShareEvent(ctx, {
@@ -139,7 +200,11 @@ export const upsertInvite = mutation({
   args: {
     vaultId: v.id("vaults"),
     email: v.string(),
-    role: v.union(v.literal("viewer"), v.literal("editor")),
+    role: v.union(
+      v.literal("viewer"),
+      v.literal("editor"),
+      v.literal("contributor")
+    ),
   },
   handler: async (ctx, { vaultId, email, role }) => {
     const { user } = await authorizeVaultAccess(ctx, vaultId);
@@ -163,15 +228,28 @@ export const upsertInvite = mutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
       .first();
+    if (recipient) {
+      const existingMembership = await ctx.db
+        .query("vault_memberships")
+        .withIndex("by_vault_id_user_id", (q) =>
+          q.eq("vault_id", vaultId).eq("user_id", recipient._id)
+        )
+        .first();
+      if (existingMembership && !existingMembership.revoked_at) {
+        throw new ConvexError("[SHARE INVITE]: user already has access");
+      }
+    }
     const now = Date.now();
-    const status = recipient ? "active" : "pending";
+    const token = await createUniqueInviteToken(ctx);
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         role,
         user_id: recipient?._id,
-        status,
+        status: "pending",
+        token,
         revoked_at: undefined,
+        consumed_at: undefined,
         updated_at: now,
       });
       return await ctx.db.get(existing._id);
@@ -182,7 +260,8 @@ export const upsertInvite = mutation({
       email: normalizedEmail,
       user_id: recipient?._id,
       role,
-      status,
+      status: "pending",
+      token,
       invited_by: user._id,
       created_at: now,
       updated_at: now,
@@ -202,7 +281,11 @@ export const upsertInvite = mutation({
 export const updateInviteRole = mutation({
   args: {
     inviteId: v.id("share_invites"),
-    role: v.union(v.literal("viewer"), v.literal("editor")),
+    role: v.union(
+      v.literal("viewer"),
+      v.literal("editor"),
+      v.literal("contributor")
+    ),
   },
   handler: async (ctx, { inviteId, role }) => {
     assertInviteRole(role);
@@ -253,6 +336,284 @@ export const removeInvite = mutation({
     await ctx.db.patch(inviteId, {
       revoked_at: Date.now(),
       updated_at: Date.now(),
+    });
+  },
+});
+
+export const getInviteByToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const invite = await ctx.db
+      .query("share_invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+    if (!invite || invite.revoked_at || invite.consumed_at) {
+      throw new ConvexError("[INVITE GET]: invite not found");
+    }
+
+    const share = await ctx.db.get(invite.share_id);
+    if (!share || share.revoked_at) {
+      throw new ConvexError("[INVITE GET]: share not found");
+    }
+
+    const vault = await ctx.db.get(share.vault_id);
+    const inviter = await ctx.db.get(invite.invited_by);
+    const user = await getAuthenticatedUser(ctx);
+
+    return {
+      invite,
+      vault,
+      inviter,
+      signedInEmail: user?.email ?? null,
+      canAccept:
+        Boolean(user?.email) &&
+        user?.email?.trim().toLowerCase() === invite.email,
+    };
+  },
+});
+
+export const acceptInvite = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const user = await authorizeUserIdentity(ctx);
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new ConvexError("[INVITE ACCEPT]: user email is required");
+    }
+
+    const invite = await ctx.db
+      .query("share_invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+    if (
+      !invite ||
+      invite.revoked_at ||
+      invite.consumed_at ||
+      invite.status !== "pending"
+    ) {
+      throw new ConvexError("[INVITE ACCEPT]: invite not available");
+    }
+    if (invite.email !== normalizedEmail) {
+      throw new ConvexError("[INVITE ACCEPT]: access denied");
+    }
+
+    const share = await ctx.db.get(invite.share_id);
+    if (!share || share.revoked_at) {
+      throw new ConvexError("[INVITE ACCEPT]: share not available");
+    }
+
+    const now = Date.now();
+    const role = toMembershipRole(invite.role);
+    const existingMembership = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_vault_id_user_id", (q) =>
+        q.eq("vault_id", share.vault_id).eq("user_id", user._id)
+      )
+      .first();
+
+    if (existingMembership) {
+      await ctx.db.patch(existingMembership._id, {
+        role,
+        invited_by: invite.invited_by,
+        revoked_at: undefined,
+        updated_at: now,
+      });
+    } else {
+      await ctx.db.insert("vault_memberships", {
+        vault_id: share.vault_id,
+        user_id: user._id,
+        role,
+        invited_by: invite.invited_by,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    await ctx.db.patch(invite._id, {
+      user_id: user._id,
+      status: "accepted",
+      consumed_at: now,
+      updated_at: now,
+    });
+
+    await logShareEvent(ctx, {
+      vaultId: share.vault_id,
+      actorId: user._id,
+      targetUserId: user._id,
+      shareId: share._id,
+      eventType: "member_added",
+      summary: `${user.email ?? user.name ?? "A member"} joined the vault`,
+    });
+    await touchVaultRecent(ctx, {
+      userId: user._id,
+      vaultId: share.vault_id,
+      action: "invite_accepted",
+    });
+
+    return { vaultId: share.vault_id };
+  },
+});
+
+export const declineInvite = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const user = await authorizeUserIdentity(ctx);
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    const invite = await ctx.db
+      .query("share_invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+    if (
+      !invite ||
+      invite.revoked_at ||
+      invite.consumed_at ||
+      invite.status !== "pending"
+    ) {
+      throw new ConvexError("[INVITE DECLINE]: invite not available");
+    }
+    if (!normalizedEmail || invite.email !== normalizedEmail) {
+      throw new ConvexError("[INVITE DECLINE]: access denied");
+    }
+
+    await ctx.db.patch(invite._id, {
+      status: "declined",
+      consumed_at: Date.now(),
+      updated_at: Date.now(),
+    });
+  },
+});
+
+export const listPendingInvites = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authorizeUserIdentity(ctx);
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    if (!normalizedEmail) return [];
+
+    const invites = await ctx.db
+      .query("share_invites")
+      .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+      .collect();
+    const pendingInvites = invites.filter(
+      (invite) =>
+        invite.status === "pending" && !invite.revoked_at && !invite.consumed_at
+    );
+
+    const rows = await Promise.all(
+      pendingInvites.map(async (invite) => {
+        const share = await ctx.db.get(invite.share_id);
+        if (!share || share.revoked_at) return null;
+        const vault = await ctx.db.get(share.vault_id);
+        const inviter = await ctx.db.get(invite.invited_by);
+        return { invite, share, vault, inviter };
+      })
+    );
+
+    return rows.filter((row): row is NonNullable<typeof row> => Boolean(row));
+  },
+});
+
+export const pendingInviteCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authorizeUserIdentity(ctx);
+    const normalizedEmail = user.email?.trim().toLowerCase();
+    if (!normalizedEmail) return 0;
+
+    const invites = await ctx.db
+      .query("share_invites")
+      .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+      .collect();
+
+    return invites.filter(
+      (invite) =>
+        invite.status === "pending" && !invite.revoked_at && !invite.consumed_at
+    ).length;
+  },
+});
+
+export const listMembers = query({
+  args: { vaultId: v.id("vaults") },
+  handler: async (ctx, { vaultId }) => {
+    await authorizeVaultAccess(ctx, vaultId);
+    const memberships = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_vault_id", (q) => q.eq("vault_id", vaultId))
+      .collect();
+    const activeMemberships = memberships.filter((row) => !row.revoked_at);
+
+    return await Promise.all(
+      activeMemberships.map(async (membership) => {
+        const user = await ctx.db.get(membership.user_id);
+        return { membership, user };
+      })
+    );
+  },
+});
+
+export const removeMember = mutation({
+  args: {
+    vaultId: v.id("vaults"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { vaultId, userId }) => {
+    const { user } = await authorizeVaultAccess(ctx, vaultId);
+    const membership = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_vault_id_user_id", (q) =>
+        q.eq("vault_id", vaultId).eq("user_id", userId)
+      )
+      .first();
+    if (!membership || membership.revoked_at) {
+      throw new ConvexError("[MEMBER REMOVE]: membership not found");
+    }
+
+    await ctx.db.patch(membership._id, {
+      revoked_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await logShareEvent(ctx, {
+      vaultId,
+      actorId: user._id,
+      targetUserId: userId,
+      eventType: "member_removed",
+      summary: "Removed a member from the vault",
+    });
+  },
+});
+
+export const leaveVault = mutation({
+  args: { vaultId: v.id("vaults") },
+  handler: async (ctx, { vaultId }) => {
+    const access = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "viewer",
+    });
+    if (!access.user || access.role === "owner") {
+      throw new ConvexError("[MEMBER LEAVE]: access denied");
+    }
+
+    const membership = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_vault_id_user_id", (q) =>
+        q.eq("vault_id", vaultId).eq("user_id", access.user._id)
+      )
+      .first();
+    if (!membership || membership.revoked_at) {
+      throw new ConvexError("[MEMBER LEAVE]: membership not found");
+    }
+
+    await ctx.db.patch(membership._id, {
+      revoked_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    await logShareEvent(ctx, {
+      vaultId,
+      actorId: access.user._id,
+      targetUserId: access.user._id,
+      eventType: "member_removed",
+      summary: `${access.user.email ?? access.user.name ?? "A member"} left the vault`,
     });
   },
 });
@@ -327,7 +688,10 @@ export const create = mutation({
     const { user } = await authorizeVaultAccess(ctx, vaultId);
     const share = await ensureOwnedShare(ctx, vaultId, user._id);
     const isPublic = mode === "public";
-    await ctx.db.patch(share._id, { is_public: isPublic });
+    await ctx.db.patch(share._id, {
+      is_public: isPublic,
+      token: await createUniqueToken(ctx),
+    });
 
     if (mode === "private") {
       const normalizedEmail = normalizeEmail(email ?? "");
@@ -346,13 +710,16 @@ export const create = mutation({
         )
         .first();
       const now = Date.now();
+      const token = await createUniqueInviteToken(ctx);
 
       if (existing) {
         await ctx.db.patch(existing._id, {
           user_id: recipient?._id,
-          status: recipient ? "active" : "pending",
-          role: "editor",
+          status: "pending",
+          role: "contributor",
+          token,
           revoked_at: undefined,
+          consumed_at: undefined,
           updated_at: now,
         });
       } else {
@@ -360,8 +727,9 @@ export const create = mutation({
           share_id: share._id,
           email: normalizedEmail,
           user_id: recipient?._id,
-          role: "editor",
-          status: recipient ? "active" : "pending",
+          role: "contributor",
+          status: "pending",
+          token,
           invited_by: user._id,
           created_at: now,
           updated_at: now,
@@ -394,6 +762,12 @@ export const listReceived = query({
   args: {},
   handler: async (ctx) => {
     const user = await authorizeUserIdentity(ctx);
+    const memberships = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_user_id", (q) => q.eq("user_id", user._id))
+      .collect();
+    const activeMemberships = memberships.filter((row) => !row.revoked_at);
+
     const normalizedEmail = user.email?.trim().toLowerCase();
     const userInvites = normalizedEmail
       ? await ctx.db
@@ -401,9 +775,12 @@ export const listReceived = query({
           .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
           .collect()
       : [];
-    // Email already matches via by_email index; do not filter by user_id — stale
-    // user_id on an invite must not hide shares the user can still access by email.
-    const linkedInvites = userInvites.filter((invite) => !invite.revoked_at);
+    const linkedInvites = userInvites.filter(
+      (invite) =>
+        !invite.revoked_at &&
+        !invite.consumed_at &&
+        (invite.status === "active" || invite.status === "accepted")
+    );
     const invitedShares = await Promise.all(
       linkedInvites.map((invite) => ctx.db.get(invite.share_id))
     );
@@ -418,16 +795,52 @@ export const listReceived = query({
     );
     const shares = [...shareMap.values()];
 
-    const rows = await Promise.all(
+    const membershipRows = await Promise.all(
+      activeMemberships.map(async (membership) => {
+        const vault = await ctx.db.get(membership.vault_id);
+        if (!vault) return null;
+        const shares = await ctx.db
+          .query("shares")
+          .withIndex("by_vault_id", (q) => q.eq("vault_id", membership.vault_id))
+          .collect();
+        const share = shares.find((row) => !row.revoked_at) ?? null;
+        const sharer = await ctx.db.get(vault.owner_id);
+        return {
+          membership,
+          share,
+          vault,
+          sharer,
+          role: membership.role,
+          status: "accepted" as const,
+        };
+      })
+    );
+
+    const legacyRows = await Promise.all(
       shares.map(async (share) => {
         const vault = await ctx.db.get(share.vault_id);
         const sharer = await ctx.db.get(share.shared_by);
         const invite = linkedInvites.find((item) => item.share_id === share._id);
-        return { share, vault, sharer, role: invite?.role ?? "editor" };
+        return {
+          share,
+          vault,
+          sharer,
+          role: invite ? toMembershipRole(invite.role) : "contributor",
+          status: "accepted" as const,
+        };
       })
     );
 
-    return rows.filter((row) => row.vault != null);
+    const seenVaults = new Set<string>();
+    const rows = [];
+    for (const row of [...membershipRows, ...legacyRows]) {
+      if (!row?.vault) continue;
+      const id = row.vault._id as string;
+      if (seenVaults.has(id)) continue;
+      seenVaults.add(id);
+      rows.push({ ...row, vault: row.vault });
+    }
+    return rows;
   },
 });
 
@@ -453,6 +866,9 @@ export const getByToken = query({
     if (!share) {
       throw new ConvexError("[SHARE GET]: share not found");
     }
+    if (share.revoked_at || !share.is_public) {
+      throw new ConvexError("[SHARE GET]: share not available");
+    }
 
     const access = await authorizeShareAccess(ctx, share);
 
@@ -464,7 +880,7 @@ export const getByToken = query({
       vault,
       sharer,
       accessRole: access.role,
-      canEdit: access.role === "editor",
+      canEdit: false,
     };
   },
 });

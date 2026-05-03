@@ -10,7 +10,7 @@ import {
 } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { authorizeUserIdentity } from "./lib/authorizeUserIdentity";
-import { authorizeVaultAccess } from "./lib/authorizeVaultAccess";
+import { authorizeVaultRole } from "./lib/authorizeVaultAccess";
 
 function buildSearchableText(input: {
   url: string;
@@ -42,7 +42,12 @@ async function logHistoryEvent(
   input: {
     vaultId: Id<"vaults">;
     actorId: Id<"users">;
-    eventType: "link_added" | "link_updated" | "link_deleted";
+    eventType:
+      | "link_added"
+      | "link_updated"
+      | "link_deleted"
+      | "link_removed"
+      | "link_viewed";
     summary: string;
     linkId?: Id<"links">;
   }
@@ -57,13 +62,57 @@ async function logHistoryEvent(
   });
 }
 
+async function touchVaultRecent(
+  ctx: MutationCtx,
+  input: {
+    userId: Id<"users">;
+    vaultId: Id<"vaults">;
+    action:
+      | "vault_opened"
+      | "link_viewed"
+      | "link_added"
+      | "link_removed"
+      | "link_pinned"
+      | "link_unpinned"
+      | "invite_accepted";
+  }
+) {
+  const existing = await ctx.db
+    .query("vault_recents")
+    .withIndex("by_user_id_vault_id", (q) =>
+      q.eq("user_id", input.userId).eq("vault_id", input.vaultId)
+    )
+    .first();
+  const now = Date.now();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      last_active_at: now,
+      last_action: input.action,
+    });
+    return;
+  }
+
+  await ctx.db.insert("vault_recents", {
+    user_id: input.userId,
+    vault_id: input.vaultId,
+    last_active_at: now,
+    last_action: input.action,
+  });
+}
+
 export const create = mutation({
   args: {
     vaultId: v.id("vaults"),
     url: v.string(),
   },
   handler: async (ctx, { vaultId, url }) => {
-    const { user } = await authorizeVaultAccess(ctx, vaultId);
+    const { user } = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "contributor",
+    });
+    if (!user) {
+      throw new ConvexError("[LINK CREATE]: access denied");
+    }
     const normalizedUrl = normalizeUrl(url);
 
     const now = Date.now();
@@ -91,6 +140,11 @@ export const create = mutation({
       summary: `Added link ${normalizedUrl}`,
       linkId,
     });
+    await touchVaultRecent(ctx, {
+      userId: user._id,
+      vaultId,
+      action: "link_added",
+    });
 
     await ctx.scheduler.runAfter(
       0,
@@ -112,9 +166,8 @@ export const update = mutation({
     category: v.optional(v.string()),
   },
   handler: async (ctx, { linkId, ...patch }) => {
-    const user = await authorizeUserIdentity(ctx);
     const link = await ctx.db.get(linkId);
-    if (!link || link.owner_id !== user._id) {
+    if (!link) {
       throw new ConvexError("[LINK UPDATE]: access denied");
     }
 
@@ -126,6 +179,16 @@ export const update = mutation({
       .query("vault_links")
       .withIndex("by_link_id", (q) => q.eq("link_id", linkId))
       .collect();
+    const vaultLink = vaultLinks[0];
+    if (!vaultLink) {
+      throw new ConvexError("[LINK UPDATE]: vault link not found");
+    }
+    const { user } = await authorizeVaultRole(ctx, vaultLink.vault_id, {
+      requiredRole: "contributor",
+    });
+    if (!user) {
+      throw new ConvexError("[LINK UPDATE]: access denied");
+    }
 
     await ctx.db.patch(linkId, {
       ...patch,
@@ -154,10 +217,9 @@ export const update = mutation({
 export const remove = mutation({
   args: { linkId: v.id("links") },
   handler: async (ctx, { linkId }) => {
-    const user = await authorizeUserIdentity(ctx);
     const link = await ctx.db.get(linkId);
 
-    if (!link || link.owner_id !== user._id) {
+    if (!link) {
       throw new ConvexError("[LINK REMOVE]: access denied");
     }
 
@@ -165,6 +227,16 @@ export const remove = mutation({
       .query("vault_links")
       .withIndex("by_link_id", (q) => q.eq("link_id", linkId))
       .collect();
+    const vaultLink = vaultLinks[0];
+    if (!vaultLink) {
+      throw new ConvexError("[LINK REMOVE]: vault link not found");
+    }
+    const { user } = await authorizeVaultRole(ctx, vaultLink.vault_id, {
+      requiredRole: "contributor",
+    });
+    if (!user) {
+      throw new ConvexError("[LINK REMOVE]: access denied");
+    }
     const sharedLinks = await ctx.db
       .query("shared_vault_links")
       .withIndex("by_link_id", (q) => q.eq("link_id", linkId))
@@ -177,31 +249,78 @@ export const remove = mutation({
         logHistoryEvent(ctx, {
           vaultId: row.vault_id,
           actorId: user._id,
-          eventType: "link_deleted",
+          eventType: "link_removed",
           summary: `Deleted link ${link.title}`,
           linkId,
         })
       )
     );
+    await touchVaultRecent(ctx, {
+      userId: user._id,
+      vaultId: vaultLink.vault_id,
+      action: "link_removed",
+    });
     await ctx.db.delete(linkId);
+  },
+});
+
+export const setPinned = mutation({
+  args: {
+    vaultId: v.id("vaults"),
+    linkId: v.id("links"),
+    pinned: v.boolean(),
+  },
+  handler: async (ctx, { vaultId, linkId, pinned }) => {
+    const { user } = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "contributor",
+    });
+    if (!user) {
+      throw new ConvexError("[LINK PIN]: access denied");
+    }
+
+    const vaultLink = await ctx.db
+      .query("vault_links")
+      .withIndex("by_link_id", (q) => q.eq("link_id", linkId))
+      .first();
+    if (!vaultLink || vaultLink.vault_id !== vaultId) {
+      throw new ConvexError("[LINK PIN]: link not found in vault");
+    }
+
+    await ctx.db.patch(vaultLink._id, {
+      pinned_at: pinned ? Date.now() : undefined,
+      pinned_by: pinned ? user._id : undefined,
+    });
+    await touchVaultRecent(ctx, {
+      userId: user._id,
+      vaultId,
+      action: pinned ? "link_pinned" : "link_unpinned",
+    });
   },
 });
 
 export const listByVault = query({
   args: { vaultId: v.id("vaults") },
   handler: async (ctx, { vaultId }) => {
-    await authorizeVaultAccess(ctx, vaultId);
+    await authorizeVaultRole(ctx, vaultId, { requiredRole: "viewer" });
     const vaultLinks = await ctx.db
       .query("vault_links")
       .withIndex("by_vault_id", (q) => q.eq("vault_id", vaultId))
       .collect();
-    const links = await Promise.all(
-      vaultLinks.map((row) => ctx.db.get(row.link_id))
+    const rows = await Promise.all(
+      vaultLinks.map(async (row) => {
+        const link = await ctx.db.get(row.link_id);
+        return link ? { ...link, pinned_at: row.pinned_at } : null;
+      })
     );
 
-    return links
+    return rows
       .filter((value): value is NonNullable<typeof value> => Boolean(value))
-      .sort((a, b) => b.updated_at - a.updated_at);
+      .sort((a, b) => {
+        const pinnedA = a.pinned_at ?? 0;
+        const pinnedB = b.pinned_at ?? 0;
+        if (pinnedA !== pinnedB) return pinnedB - pinnedA;
+        return b.updated_at - a.updated_at;
+      });
   },
 });
 
@@ -211,7 +330,7 @@ export const search = query({
     query: v.string(),
   },
   handler: async (ctx, { vaultId, query: searchQuery }) => {
-    await authorizeVaultAccess(ctx, vaultId);
+    await authorizeVaultRole(ctx, vaultId, { requiredRole: "viewer" });
     const normalized = searchQuery.trim();
 
     const allVaultLinks = await ctx.db
@@ -276,6 +395,7 @@ export const search = query({
           ...link,
           addedByName: addedByInfo?.name ?? null,
           addedByAvatar: addedByInfo?.avatar ?? null,
+          pinnedAt: vl?.pinned_at ?? null,
           viewers,
         };
       }),
@@ -336,6 +456,15 @@ export const recordView = mutation({
   args: { linkId: v.id("links") },
   handler: async (ctx, { linkId }) => {
     const user = await authorizeUserIdentity(ctx);
+    const vaultLink = await ctx.db
+      .query("vault_links")
+      .withIndex("by_link_id", (q) => q.eq("link_id", linkId))
+      .first();
+    if (!vaultLink) {
+      throw new ConvexError("[LINK VIEW]: vault link not found");
+    }
+    await authorizeVaultRole(ctx, vaultLink.vault_id, { requiredRole: "viewer" });
+
     const existing = await ctx.db
       .query("link_views")
       .withIndex("by_link_id_user_id", (q) =>
@@ -352,6 +481,18 @@ export const recordView = mutation({
         viewed_at: Date.now(),
       });
     }
+    await logHistoryEvent(ctx, {
+      vaultId: vaultLink.vault_id,
+      actorId: user._id,
+      eventType: "link_viewed",
+      summary: "Viewed a link",
+      linkId,
+    });
+    await touchVaultRecent(ctx, {
+      userId: user._id,
+      vaultId: vaultLink.vault_id,
+      action: "link_viewed",
+    });
   },
 });
 

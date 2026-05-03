@@ -1,10 +1,13 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { authorizeUserIdentity } from "./lib/authorizeUserIdentity";
-import { authorizeVaultAccess } from "./lib/authorizeVaultAccess";
+import {
+  authorizeVaultAccess,
+  authorizeVaultRole,
+} from "./lib/authorizeVaultAccess";
 
 const DEFAULT_VAULT_COLOR = "#6b7280";
 const DEFAULT_VAULT_EMOJI = "📁";
@@ -37,18 +40,82 @@ async function logHistoryEvent(
   });
 }
 
+async function touchVaultRecent(
+  ctx: MutationCtx,
+  input: {
+    userId: Id<"users">;
+    vaultId: Id<"vaults">;
+    action:
+      | "vault_opened"
+      | "link_viewed"
+      | "link_added"
+      | "link_removed"
+      | "link_pinned"
+      | "link_unpinned"
+      | "invite_accepted";
+  }
+) {
+  const existing = await ctx.db
+    .query("vault_recents")
+    .withIndex("by_user_id_vault_id", (q) =>
+      q.eq("user_id", input.userId).eq("vault_id", input.vaultId)
+    )
+    .first();
+  const now = Date.now();
+
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      last_active_at: now,
+      last_action: input.action,
+    });
+    return;
+  }
+
+  await ctx.db.insert("vault_recents", {
+    user_id: input.userId,
+    vault_id: input.vaultId,
+    last_active_at: now,
+    last_action: input.action,
+  });
+}
+
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
     const user = await authorizeUserIdentity(ctx);
 
-    const vaults = await ctx.db
+    const ownedVaults = await ctx.db
       .query("vaults")
       .withIndex("by_owner_id", (q) => q.eq("owner_id", user._id))
       .collect();
+    const memberships = await ctx.db
+      .query("vault_memberships")
+      .withIndex("by_user_id", (q) => q.eq("user_id", user._id))
+      .collect();
+    const memberVaults = await Promise.all(
+      memberships
+        .filter((membership) => !membership.revoked_at)
+        .map(async (membership) => {
+          const vault = await ctx.db.get(membership.vault_id);
+          return vault ? { vault, membership } : null;
+        })
+    );
 
     return Promise.all(
-      vaults.map(async (vault) => {
+      [
+        ...ownedVaults.map((vault) => ({
+          vault,
+          accessRole: "owner" as const,
+          vaultType: "owned" as const,
+        })),
+        ...memberVaults
+          .filter((row): row is NonNullable<typeof row> => Boolean(row))
+          .map(({ vault, membership }) => ({
+            vault,
+            accessRole: membership.role,
+            vaultType: "shared" as const,
+          })),
+      ].map(async ({ vault, accessRole, vaultType }) => {
         const vaultLinks = await ctx.db
           .query("vault_links")
           .withIndex("by_vault_id", (q) => q.eq("vault_id", vault._id))
@@ -68,6 +135,8 @@ export const listMine = query({
 
         return {
           ...vault,
+          accessRole,
+          vaultType,
           linkCount: vaultLinks.length,
           topCategories,
         };
@@ -128,11 +197,74 @@ export const createDefaultIfMissing = mutation({
   },
 });
 
+export const recordOpen = mutation({
+  args: { vaultId: v.id("vaults") },
+  handler: async (ctx, { vaultId }) => {
+    const access = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "viewer",
+    });
+    if (!access.user) {
+      return;
+    }
+    await touchVaultRecent(ctx, {
+      userId: access.user._id,
+      vaultId,
+      action: "vault_opened",
+    });
+  },
+});
+
+export const listRecent = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await authorizeUserIdentity(ctx);
+    const rows = await ctx.db
+      .query("vault_recents")
+      .withIndex("by_user_id", (q) => q.eq("user_id", user._id))
+      .collect();
+
+    const sorted = rows
+      .sort((a, b) => b.last_active_at - a.last_active_at)
+      .slice(0, 6);
+
+    const vaults = await Promise.all(
+      sorted.map(async (row) => {
+        const vault = await ctx.db.get(row.vault_id);
+        if (!vault) return null;
+        if (vault.owner_id === user._id) {
+          return { ...vault, recent: row, accessRole: "owner" as const };
+        }
+        const membership = await ctx.db
+          .query("vault_memberships")
+          .withIndex("by_vault_id_user_id", (q) =>
+            q.eq("vault_id", row.vault_id).eq("user_id", user._id)
+          )
+          .first();
+        if (!membership || membership.revoked_at) return null;
+        return { ...vault, recent: row, accessRole: membership.role };
+      })
+    );
+
+    return vaults.filter(
+      (vault): vault is NonNullable<typeof vault> => Boolean(vault)
+    );
+  },
+});
+
 export const get = query({
   args: { vaultId: v.id("vaults") },
   handler: async (ctx, { vaultId }) => {
-    const { vault } = await authorizeVaultAccess(ctx, vaultId);
-    return vault;
+    const access = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "viewer",
+    });
+    return {
+      ...access.vault,
+      accessRole: access.role,
+      canEdit:
+        access.role === "owner" || access.role === "contributor",
+      canManageAccess: access.role === "owner",
+      canDelete: access.role === "owner",
+    };
   },
 });
 
@@ -144,7 +276,12 @@ export const update = mutation({
     emoji: v.optional(v.string()),
   },
   handler: async (ctx, { vaultId, name, color, emoji }) => {
-    const { user, vault } = await authorizeVaultAccess(ctx, vaultId);
+    const { user, vault } = await authorizeVaultRole(ctx, vaultId, {
+      requiredRole: "contributor",
+    });
+    if (!user) {
+      throw new ConvexError("[VAULT UPDATE]: access denied");
+    }
     await ctx.db.patch(vaultId, {
       ...(name ? { name: name.trim() } : {}),
       ...(color ? { color: color.trim() } : {}),
